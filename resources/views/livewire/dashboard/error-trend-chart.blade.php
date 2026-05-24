@@ -1,22 +1,26 @@
-<div x-data="{ 
-    darkMode: localStorage.getItem('darkMode') === 'true',
-    chartData: @js($chartData ?? ['labels' => [], 'data' => []]),
-    categoryData: @js($categoryData ?? ['labels' => [], 'data' => []])
-}" x-init="$watch('darkMode', val => localStorage.setItem('darkMode', val))">
-    <!-- Error Trend Chart -->
-    <div class="mb-8">
-        <error-trend-chart 
-            :labels="chartData?.labels || []" 
-            :data="chartData?.data || []"
+<div>
+    <div data-vue-chart
+         x-data="{
+             darkMode: localStorage.getItem('darkMode') === 'true',
+             chartLabels: {{ json_encode($chartData['labels'] ?? []) }},
+             chartValues: {{ json_encode($chartData['data'] ?? []) }}
+         }">
+        <error-trend-chart
+            :labels="chartLabels"
+            :data="chartValues"
             :dark-mode="darkMode"
         ></error-trend-chart>
     </div>
 
-    <!-- Category Chart -->
-    <div>
-        <error-category-chart 
-            :labels="categoryData?.labels || []" 
-            :data="categoryData?.data || []"
+    <div class="mt-6" data-vue-chart
+         x-data="{
+             darkMode: localStorage.getItem('darkMode') === 'true',
+             catLabels: {{ json_encode($categoryData['labels'] ?? []) }},
+             catValues: {{ json_encode($categoryData['data'] ?? []) }}
+         }">
+        <error-category-chart
+            :labels="catLabels"
+            :data="catValues"
             :dark-mode="darkMode"
         ></error-category-chart>
     </div>

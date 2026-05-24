@@ -1,6 +1,9 @@
 <?php
 
 use Illuminate\Support\Facades\Route;
-use App\Livewire\Dashboard\DashboardOverview;
+use App\Livewire\Projects\ProjectList;
+use App\Livewire\Projects\ProjectDashboard;
 
-Route::get('/', DashboardOverview::class)->name('dashboard');
+// ── Project routes ────────────────────────────────────────────────────────────
+Route::get('/', ProjectList::class)->name('projects.index');
+Route::get('/projects/{project:slug}', ProjectDashboard::class)->name('projects.show');

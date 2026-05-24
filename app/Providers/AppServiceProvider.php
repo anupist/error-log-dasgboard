@@ -2,22 +2,23 @@
 
 namespace App\Providers;
 
+use App\Services\Api\ErrorApiService;
+use App\Services\Api\ProjectErrorApiService;
+use App\Services\ErrorAnalyzer\ErrorCategorizer;
 use Illuminate\Support\ServiceProvider;
 
 class AppServiceProvider extends ServiceProvider
 {
-    /**
-     * Register any application services.
-     */
     public function register(): void
     {
-        $this->app->singleton(\App\Services\Api\ErrorApiService::class);
-        $this->app->singleton(\App\Services\ErrorAnalyzer\ErrorCategorizer::class);
+        // Legacy single-project service (kept for backward compatibility)
+        $this->app->singleton(ErrorApiService::class);
+
+        // Multi-project services
+        $this->app->singleton(ProjectErrorApiService::class);
+        $this->app->singleton(ErrorCategorizer::class);
     }
 
-    /**
-     * Bootstrap any application services.
-     */
     public function boot(): void
     {
         //
