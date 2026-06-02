@@ -16,12 +16,12 @@ class ProjectErrorsTable extends Component
 
     public Project $project;
 
-    public string  $search           = '';
-    public string  $categoryFilter   = '';
-    public string  $severityFilter   = '';
-    public string  $dateFrom         = '';
-    public string  $dateTo           = '';
-    public int     $perPage          = 20;
+    public string  $search         = '';
+    public string  $categoryFilter = '';
+    public string  $severityFilter = '';
+    public int     $perPage        = 20;
+    public string  $currentLogFile = '';
+
     public ?ErrorLogDTO $selectedError = null;
 
     protected ProjectErrorApiService $apiService;
@@ -35,9 +35,8 @@ class ProjectErrorsTable extends Component
 
     public function mount(Project $project): void
     {
-        $this->project  = $project;
-        $this->dateFrom = now()->toDateString();
-        $this->dateTo   = now()->toDateString();
+        $this->project = $project;
+        // Table starts empty; ProjectDashboard fires log-file-changed after mount
     }
 
     public function updatingSearch(): void
@@ -54,23 +53,27 @@ class ProjectErrorsTable extends Component
     ): void {
         $this->categoryFilter = $category;
         $this->severityFilter = $severity;
-        $this->dateFrom       = $dateFrom;
-        $this->dateTo         = $dateTo;
         $this->resetPage();
     }
 
-    #[On('refresh-project')]
-    public function refreshErrors(?int $projectId = null): void
+    #[On('log-file-changed')]
+    public function onLogFileChanged(int $projectId, string $logFile): void
     {
-        if ($projectId !== null && $projectId !== $this->project->id) {
+        if ($projectId !== $this->project->id) {
             return;
         }
-        // Re-render is automatic
+
+        $this->currentLogFile = $logFile;
+        $this->resetPage();
     }
 
     public function viewError(string $errorId): void
     {
-        $errors      = $this->apiService->getTodayErrors($this->project);
+        if (empty($this->currentLogFile)) {
+            return;
+        }
+
+        $errors      = $this->apiService->getErrorsByLogFile($this->project, $this->currentLogFile);
         $categorized = collect($this->categorizer->categorizeCollection($errors));
         $this->selectedError = $categorized->firstWhere('id', $errorId);
     }
@@ -82,8 +85,12 @@ class ProjectErrorsTable extends Component
 
     public function render(): \Illuminate\View\View
     {
-        $errors      = $this->apiService->getTodayErrors($this->project);
-        $categorized = collect($this->categorizer->categorizeCollection($errors));
+        $categorized = collect();
+
+        if ($this->currentLogFile) {
+            $errors      = $this->apiService->getErrorsByLogFile($this->project, $this->currentLogFile);
+            $categorized = collect($this->categorizer->categorizeCollection($errors));
+        }
 
         if ($this->categoryFilter) {
             $categorized = $categorized->where('category', $this->categoryFilter);
@@ -107,9 +114,9 @@ class ProjectErrorsTable extends Component
         $items       = $sorted->forPage($currentPage, $this->perPage);
 
         return view('livewire.projects.project-errors-table', [
-            'errors'   => $items,
-            'total'    => $total,
-            'perPage'  => $this->perPage,
+            'errors'  => $items,
+            'total'   => $total,
+            'perPage' => $this->perPage,
         ]);
     }
 }

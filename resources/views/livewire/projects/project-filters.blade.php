@@ -1,22 +1,5 @@
 <div class="space-y-5">
 
-    {{-- Date range --}}
-    <div>
-        <p class="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider mb-2">Date Range</p>
-        <div class="space-y-2">
-            <div>
-                <label class="block text-xs text-gray-500 dark:text-gray-400 mb-1">From</label>
-                <input wire:model.live="dateFrom" type="date"
-                       class="w-full px-3 py-2 text-sm bg-gray-50 dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-lg text-gray-900 dark:text-white focus:ring-2 focus:ring-indigo-500">
-            </div>
-            <div>
-                <label class="block text-xs text-gray-500 dark:text-gray-400 mb-1">To</label>
-                <input wire:model.live="dateTo" type="date"
-                       class="w-full px-3 py-2 text-sm bg-gray-50 dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-lg text-gray-900 dark:text-white focus:ring-2 focus:ring-indigo-500">
-            </div>
-        </div>
-    </div>
-
     {{-- Severity --}}
     <div>
         <p class="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider mb-2">Severity</p>

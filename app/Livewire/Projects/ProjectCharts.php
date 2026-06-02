@@ -11,6 +11,7 @@ use Livewire\Attributes\On;
 class ProjectCharts extends Component
 {
     public Project $project;
+
     /** 'trend' or 'category' */
     public string $chartType = 'trend';
 
@@ -30,27 +31,29 @@ class ProjectCharts extends Component
     {
         $this->project   = $project;
         $this->chartType = $chartType;
-        $this->loadChartData();
+        // Charts start empty; ProjectDashboard will fire log-file-changed after mount
     }
 
-    #[On('refresh-project')]
-    public function loadChartData(?int $projectId = null): void
+    #[On('log-file-changed')]
+    public function loadChartData(int $projectId, string $logFile): void
     {
-        if ($projectId !== null && $projectId !== $this->project->id) {
+        if ($projectId !== $this->project->id) {
             return;
         }
 
-        $errors      = $this->apiService->getTodayErrors($this->project);
+        $errors      = $this->apiService->getErrorsByLogFile($this->project, $logFile);
         $categorized = collect($this->categorizer->categorizeCollection($errors));
 
-        // Build 24-hour buckets
+        // Build hourly buckets across all 24 hours
         $hourly = [];
         for ($h = 0; $h < 24; $h++) {
             $hourly[sprintf('%02d:00', $h)] = 0;
         }
 
         foreach ($categorized->groupBy(fn ($e) => $e->occurred_at->format('H:00')) as $hour => $group) {
-            $hourly[$hour] = $group->count();
+            if (array_key_exists($hour, $hourly)) {
+                $hourly[$hour] = $group->count();
+            }
         }
 
         $this->chartData = [

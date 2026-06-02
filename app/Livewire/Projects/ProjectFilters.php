@@ -12,8 +12,6 @@ class ProjectFilters extends Component
 
     public string $selectedCategory = '';
     public string $selectedSeverity = '';
-    public string $dateFrom         = '';
-    public string $dateTo           = '';
 
     public array $categories = [];
     public array $severities = ['critical', 'error', 'warning', 'info'];
@@ -29,8 +27,6 @@ class ProjectFilters extends Component
     {
         $this->project    = $project;
         $this->categories = $this->categorizer->getCategories();
-        $this->dateFrom   = now()->toDateString();
-        $this->dateTo     = now()->toDateString();
     }
 
     public function selectCategory(string $category): void
@@ -45,22 +41,10 @@ class ProjectFilters extends Component
         $this->dispatchFilters();
     }
 
-    public function updatedDateFrom(): void
-    {
-        $this->dispatchFilters();
-    }
-
-    public function updatedDateTo(): void
-    {
-        $this->dispatchFilters();
-    }
-
     public function clearAll(): void
     {
         $this->selectedCategory = '';
         $this->selectedSeverity = '';
-        $this->dateFrom         = now()->toDateString();
-        $this->dateTo           = now()->toDateString();
         $this->dispatchFilters();
     }
 
@@ -69,8 +53,6 @@ class ProjectFilters extends Component
         $this->dispatch('project-filters-changed',
             category: $this->selectedCategory,
             severity: $this->selectedSeverity,
-            dateFrom: $this->dateFrom,
-            dateTo:   $this->dateTo,
         );
     }
 

@@ -1,4 +1,4 @@
-<div wire:poll.{{ $refreshInterval }}s="refreshData" class="space-y-6">
+<div wire:poll.{{ $refreshInterval }}s="refreshData" wire:init="@if($selectedLogFile)selectLogFile('{{ $selectedLogFile }}')@endif" class="space-y-6">
 
     {{-- ── Breadcrumb + actions ─────────────────────────────────────────── --}}
     <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
@@ -47,13 +47,48 @@
         </div>
     </div>
 
+    {{-- ── Log File Selector ────────────────────────────────────────────── --}}
+    @if(!empty($logFiles))
+        <div class="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-5">
+            <div class="flex items-center justify-between mb-3">
+                <label class="text-sm font-semibold text-gray-900 dark:text-white">Select Log File</label>
+                <span class="text-xs text-gray-500 dark:text-gray-400">{{ count($logFiles) }} file(s) available</span>
+            </div>
+            <select wire:change="selectLogFile($event.target.value)"
+                    class="w-full px-4 py-2.5 bg-gray-50 dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-lg text-gray-900 dark:text-white focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition-colors">
+                @foreach($logFiles as $file)
+                    <option value="{{ $file['filename'] }}" @selected($selectedLogFile === $file['filename'])>
+                        {{ $file['filename'] }} ({{ $file['size_human'] }}) - {{ $file['last_modified'] }}
+                    </option>
+                @endforeach
+            </select>
+        </div>
+    @else
+        <div class="bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-700 rounded-xl p-4">
+            <div class="flex items-start gap-3">
+                <svg class="w-5 h-5 text-yellow-600 dark:text-yellow-400 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"/>
+                </svg>
+                <div>
+                    <p class="text-sm font-semibold text-yellow-800 dark:text-yellow-200">No Log Files Found</p>
+                    <p class="text-xs text-yellow-700 dark:text-yellow-300 mt-1">The API returned no log files for this project.</p>
+                </div>
+            </div>
+        </div>
+    @endif
+
     {{-- ── Stats cards ──────────────────────────────────────────────────── --}}
     @livewire('projects.project-stats', ['project' => $project], key('stats-'.$project->id))
 
     {{-- ── Charts ───────────────────────────────────────────────────────── --}}
     <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
         <div class="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-6">
-            <h3 class="text-base font-semibold text-gray-900 dark:text-white mb-4">Error Trend (24 Hours)</h3>
+            <h3 class="text-base font-semibold text-gray-900 dark:text-white mb-4">
+                Error Trend
+                @if($selectedLogFile)
+                    <span class="text-xs font-normal text-gray-400 ml-2">— {{ $selectedLogFile }}</span>
+                @endif
+            </h3>
             @livewire('projects.project-charts', ['project' => $project, 'chartType' => 'trend'], key('charts-trend-'.$project->id))
         </div>
 

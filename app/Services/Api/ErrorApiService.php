@@ -3,6 +3,7 @@
 namespace App\Services\Api;
 
 use App\DTOs\ErrorLogDTO;
+use App\Services\ErrorAnalyzer\LaravelLogParser;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Http;
@@ -54,15 +55,21 @@ class ErrorApiService
 
                 if ($response->successful()) {
                     $data = $response->json();
-                    
-                    // Handle different response structures
+
+                    // ── New path: API returns raw log content string ──────────
+                    // Shape: { "success": true, "data": { "content": "...", "log_file": "..." } }
+                    if (isset($data['data']['content']) && is_string($data['data']['content'])) {
+                        return LaravelLogParser::parse($data['data']['content']);
+                    }
+
+                    // ── Legacy path: structured errors array ──────────────────
                     $errors = $data['data'] ?? $data['errors'] ?? $data;
-                    
+
                     // If errors is a string (JSON encoded), decode it
                     if (is_string($errors)) {
                         $errors = json_decode($errors, true);
                     }
-                    
+
                     if (!is_array($errors)) {
                         return collect();
                     }
@@ -72,7 +79,7 @@ class ErrorApiService
                         if (!is_array($error)) {
                             return null;
                         }
-                        
+
                         return ErrorLogDTO::fromArray($error);
                     })->filter(); // Remove null values
                 }

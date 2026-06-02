@@ -4,6 +4,7 @@ namespace App\Services\Api;
 
 use App\DTOs\ErrorLogDTO;
 use App\Models\Project;
+use App\Services\ErrorAnalyzer\LaravelLogParser;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Http;
@@ -11,36 +12,137 @@ use Illuminate\Support\Facades\Log;
 
 class ProjectErrorApiService
 {
-    private const ENDPOINT = '/log-errors/laravel';
+    /** Endpoint for listing all log files */
+    private const ENDPOINT_LIST = '/log-errors';
+
+    /** Endpoint for fetching a specific log file: /log-errors/{name} */
+    private const ENDPOINT_FILE = '/log-errors/';
 
     // ─── Public API ──────────────────────────────────────────────────────────
 
     /**
-     * Fetch today's errors for a given project.
+     * Fetch the list of available log files for a project.
+     *
+     * API response shape:
+     * {
+     *   "success": true,
+     *   "data": {
+     *     "total_files": 18,
+     *     "files": [
+     *       { "filename": "laravel-2026-04-29.log", "size": 166380,
+     *         "size_human": "162.48 KB", "last_modified": "2026-04-29 19:11:52" }
+     *     ]
+     *   }
+     * }
+     *
+     * @return array<int, array{filename: string, size: int, size_human: string, last_modified: string}>
      */
-    public function getTodayErrors(Project $project): Collection
+    public function getLogFiles(Project $project): array
     {
-        return $this->getErrorsByDate($project, now()->toDateString());
+        if (! $this->isConfigured($project)) {
+            return [];
+        }
+
+        $cacheKey = $this->cacheKey($project, 'log_files_' . now()->format('Y-m-d-H'));
+
+        return Cache::remember($cacheKey, $this->cacheTtl(), function () use ($project) {
+            try {
+                $request = Http::timeout(config('error-api.timeout', 15));
+
+                if ($project->api_token) {
+                    $request = $request->withToken($project->api_token);
+                }
+
+                $url      = rtrim($project->api_url, '/') . self::ENDPOINT_LIST;
+                $response = $request->get($url);
+
+                if (! $response->successful()) {
+                    Log::warning('ProjectErrorApiService: getLogFiles non-2xx', [
+                        'project' => $project->slug,
+                        'status'  => $response->status(),
+                        'url'     => $url,
+                    ]);
+                    return [];
+                }
+
+                $body  = $response->json();
+                $files = $body['data']['files'] ?? [];
+
+                if (! is_array($files)) {
+                    return [];
+                }
+
+                Log::info('Log Files Loaded', [
+                    'project' => $project->slug,
+                    'count'   => count($files),
+                ]);
+
+                // Sort newest first
+                usort($files, fn ($a, $b) => strcmp($b['last_modified'] ?? '', $a['last_modified'] ?? ''));
+
+                return $files;
+
+            } catch (\Exception $e) {
+                Log::error('ProjectErrorApiService: getLogFiles exception', [
+                    'project' => $project->slug,
+                    'message' => $e->getMessage(),
+                ]);
+                return [];
+            }
+        });
     }
 
     /**
-     * Fetch errors for a specific date.
+     * Determine the newest log filename for a project.
+     * Returns null when no files are available.
      */
-    public function getErrorsByDate(Project $project, string $date): Collection
+    public function getNewestLogFile(Project $project): ?string
+    {
+        $files = $this->getLogFiles($project);
+
+        if (empty($files)) {
+            return null;
+        }
+
+        // getLogFiles() already sorts newest-first
+        return $files[0]['filename'] ?? null;
+    }
+
+    /**
+     * Fetch and parse errors from a specific log file.
+     *
+     * @param  string  $filename  e.g. "laravel-2026-05-19.log"
+     */
+    public function getErrorsByLogFile(Project $project, string $filename): Collection
     {
         if (! $this->isConfigured($project)) {
             return collect();
         }
 
-        $cacheKey = $this->cacheKey($project, "errors_{$date}");
+        $cacheKey = $this->cacheKey($project, 'file_' . md5($filename));
 
-        return Cache::remember($cacheKey, $this->cacheTtl(), function () use ($project, $date) {
-            return $this->fetchErrors($project, $date);
+        return Cache::remember($cacheKey, $this->cacheTtl(), function () use ($project, $filename) {
+            return $this->fetchErrorsByFilename($project, $filename);
         });
     }
 
     /**
-     * Get aggregated summary statistics for a project.
+     * @deprecated  Use getErrorsByLogFile() instead.
+     * Kept for backward-compat with anything that still calls getTodayErrors().
+     */
+    public function getTodayErrors(Project $project): Collection
+    {
+        $newest = $this->getNewestLogFile($project);
+
+        if ($newest === null) {
+            return collect();
+        }
+
+        return $this->getErrorsByLogFile($project, $newest);
+    }
+
+    /**
+     * Get aggregated summary statistics for a project (based on newest log file).
      */
     public function getSummary(Project $project): array
     {
@@ -60,51 +162,7 @@ class ProjectErrorApiService
     }
 
     /**
-     * Paginate errors with optional filters.
-     */
-    public function getPaginated(
-        Project $project,
-        int $page = 1,
-        int $perPage = 20,
-        ?string $category = null,
-        ?string $severity = null,
-        ?string $search = null,
-        ?string $dateFrom = null,
-        ?string $dateTo = null,
-    ): array {
-        $errors = $this->getTodayErrors($project);
-
-        if ($category) {
-            $errors = $errors->where('category', $category);
-        }
-
-        if ($severity) {
-            $errors = $errors->where('severity', $severity);
-        }
-
-        if ($search) {
-            $lower = strtolower($search);
-            $errors = $errors->filter(
-                fn ($e) => str_contains(strtolower($e->message), $lower)
-                        || str_contains(strtolower($e->exception), $lower)
-            );
-        }
-
-        $total    = $errors->count();
-        $lastPage = max(1, (int) ceil($total / $perPage));
-
-        return [
-            'data'         => $errors->sortByDesc('occurred_at')->forPage($page, $perPage)->values(),
-            'current_page' => $page,
-            'per_page'     => $perPage,
-            'total'        => $total,
-            'last_page'    => $lastPage,
-        ];
-    }
-
-    /**
      * Perform a health check against the project's API.
-     * Returns status, response_time_ms, and last_error.
      */
     public function healthCheck(Project $project): array
     {
@@ -126,11 +184,8 @@ class ProjectErrorApiService
                 $request = $request->withToken($project->api_token);
             }
 
-            $response = $request->get(rtrim($project->api_url, '/') . self::ENDPOINT, [
-                'date' => now()->toDateString(),
-            ]);
-
-            $ms = (int) round((microtime(true) - $start) * 1000);
+            $response = $request->get(rtrim($project->api_url, '/') . self::ENDPOINT_LIST);
+            $ms       = (int) round((microtime(true) - $start) * 1000);
 
             return [
                 'online'           => $response->successful(),
@@ -155,16 +210,27 @@ class ProjectErrorApiService
      */
     public function clearCache(Project $project): void
     {
-        // Laravel file/array cache doesn't support tag-based flush without Redis,
-        // so we flush the whole cache. For Redis, use Cache::tags([...]).
         Cache::flush();
     }
 
     // ─── Private helpers ─────────────────────────────────────────────────────
 
-    private function fetchErrors(Project $project, string $date): Collection
+    /**
+     * Call the API for a specific log filename and return parsed errors.
+     */
+    private function fetchErrorsByFilename(Project $project, string $filename): Collection
     {
         try {
+            // Strip .log extension → "laravel-2026-05-19.log" becomes "laravel-2026-05-19"
+            $name    = preg_replace('/\.log$/i', '', $filename);
+            $url     = rtrim($project->api_url, '/') . self::ENDPOINT_FILE . $name;
+
+            Log::info('Selected Log File', [
+                'project'  => $project->slug,
+                'file'     => $filename,
+                'url'      => $url,
+            ]);
+
             $request = Http::timeout(config('error-api.timeout', 15))
                 ->retry(config('error-api.retry', 3), 100);
 
@@ -172,20 +238,25 @@ class ProjectErrorApiService
                 $request = $request->withToken($project->api_token);
             }
 
-            $response = $request->get(
-                rtrim($project->api_url, '/') . self::ENDPOINT,
-                ['date' => $date]
-            );
+            $response = $request->get($url);
 
             if (! $response->successful()) {
-                Log::warning('ProjectErrorApiService: non-2xx response', [
-                    'project' => $project->slug,
-                    'status'  => $response->status(),
+                Log::warning('ProjectErrorApiService: fetchErrorsByFilename non-2xx', [
+                    'project'  => $project->slug,
+                    'filename' => $filename,
+                    'status'   => $response->status(),
                 ]);
                 return collect();
             }
 
-            $body   = $response->json();
+            $body = $response->json();
+
+            // Primary path: { "data": { "content": "raw log string" } }
+            if (isset($body['data']['content']) && is_string($body['data']['content'])) {
+                return LaravelLogParser::parse($body['data']['content']);
+            }
+
+            // Fallback: structured errors array
             $errors = $body['data'] ?? $body['errors'] ?? $body;
 
             if (is_string($errors)) {
@@ -201,9 +272,10 @@ class ProjectErrorApiService
                 ->filter();
 
         } catch (\Exception $e) {
-            Log::error('ProjectErrorApiService: exception', [
-                'project' => $project->slug,
-                'message' => $e->getMessage(),
+            Log::error('ProjectErrorApiService: fetchErrorsByFilename exception', [
+                'project'  => $project->slug,
+                'filename' => $filename,
+                'message'  => $e->getMessage(),
             ]);
             return collect();
         }
