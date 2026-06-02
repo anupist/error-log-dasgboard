@@ -72,8 +72,40 @@
 
         {{-- Footer --}}
         <div class="p-4 border-t border-gray-200 dark:border-gray-700 shrink-0">
+            {{-- Logged-in user --}}
+            @auth
+                <div class="flex items-center gap-3 mb-3">
+                    <div class="w-8 h-8 rounded-full bg-indigo-100 dark:bg-indigo-900/50 flex items-center justify-center shrink-0">
+                        <span class="text-xs font-bold text-indigo-600 dark:text-indigo-400">
+                            {{ strtoupper(substr(auth()->user()->name, 0, 1)) }}
+                        </span>
+                    </div>
+                    <div class="min-w-0">
+                        <p class="text-xs font-semibold text-gray-900 dark:text-white truncate">{{ auth()->user()->name }}</p>
+                        <p class="text-xs text-gray-400 dark:text-gray-500 truncate">{{ auth()->user()->email }}</p>
+                    </div>
+                </div>
+            @endauth
+
             <div class="flex items-center justify-between">
-                <span class="text-xs text-gray-400 dark:text-gray-500">v2.0.0</span>
+                <div class="flex items-center gap-2">
+                    <span class="text-xs text-gray-400 dark:text-gray-500">v2.0.0</span>
+
+                    @auth
+                        <form method="POST" action="{{ route('logout') }}">
+                            @csrf
+                            <button type="submit"
+                                    class="text-xs text-gray-400 dark:text-gray-500 hover:text-red-600 dark:hover:text-red-400 transition-colors flex items-center gap-1">
+                                <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                          d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1"/>
+                                </svg>
+                                Sign out
+                            </button>
+                        </form>
+                    @endauth
+                </div>
+
                 <button @click="darkMode = !darkMode"
                         class="p-2 rounded-lg text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors">
                     <svg x-show="!darkMode" class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
